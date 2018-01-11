@@ -1,0 +1,156 @@
+syntax = "proto3";
+
+package ascit.integrationtest;
+
+//
+// This file contains the protocol buffer definitions used to communicate itest
+// information from Bazel to the integration testing functionality within
+// foundry.
+//
+// IMPORTANT: This file has greater than normal backwards compatibility
+// requirements. In the integration test Bazel rules, we reference fields in
+// these protos by name (so the wire format is text proto, not binary serialized
+// proto), so field renames are *not* safe (though message renames are fine).
+// Tag number changes are likely technically safe, but should be avoided anyway.
+
+// Contains the information that describes a System Under Test (SUT) Component.
+// This could be a single machine running an individual binary, or a Docker
+// image deployed to the cloud.
+//
+// Next ID: 9
+message SutComponent {
+  // The name of the component, this will correspond to the name field of the
+  // sut_component target in the BUILD file.
+  string name = 1;
+
+  // A list of executables to run on the platform prior to running the
+  // integration test. There must be at least one such executable.
+  repeated Executable setups = 2;
+
+  // An optional list of executables to run for cleaning up whatever the setup
+  // set up.
+  repeated Executable teardowns = 3;
+
+  // A string referring to a downloadable Docker image in which the setup and
+  // teardown scripts should run.
+  string docker_image = 4;
+
+  // A list of strings which are the set of properties that this SUT component
+  // must set during the setup phase. It is a setup error if these properties
+  // are not set after setup.
+
+  repeated OutputProperty output_properties = 5 [deprecated = true];
+
+  // The SUT components this component directly depends on, along with the alias
+  // for each component (for scoping the key-value properties produced by the
+  // setup of each component).
+  repeated SutComponentAlias sut_component_alias = 6;
+
+  // The number of external ports required by this SUT component.
+  int32 num_requested_ports = 7;
+
+  // A list of files which are expected to be created by this SUT
+  // component. Similar to output_properties, if these files are not created
+  // after the setup, it will be considered a setup error.
+
+  repeated SutFile output_files = 8 [deprecated = true];
+}
+
+// IntegrationTestConfiguration lists all the SUT components needed to be able
+// to execute an integration test, as well as other information needed to run
+// the test.
+//
+// Next ID: 9
+message IntegrationTestConfiguration {
+  // The name of the integration test BUILD rule, if run from Bazel.
+  string name = 1;
+
+  // The SUT components this test directly depends on.
+  repeated SutComponent components = 2;
+
+  // A string referring to a downloadable docker image in which the test runs.
+  string docker_image = 3;
+
+  // The type of integration test. All new tests are encouraged to use
+  // MULTI_MACHINE.
+
+  enum TestType {
+    SINGLE_MACHINE = 0;
+    MULTI_MACHINE = 1;
+  }
+  TestType test_type = 4;
+
+  // An optional list of user provided executables to run prior to the test in
+  // the same container as the test.
+  repeated Executable pretest_executables = 5;
+
+  // The executable test program provided by the user.
+  Executable test_executable = 6;
+
+  // The alias for each SUT component that the test directly depends on (for
+  // scoping the key-value properties produced by the setup of the SUT
+  // components).
+  repeated SutComponentAlias sut_component_alias = 7;
+
+  // Time duration limit for running the complete integration test, including
+  // setup of all SUT components, the test itself, and teardown of all SUT
+  // components.
+  string timeout_seconds = 8;
+}
+
+// Contains information about the executable. Executables include:
+// - Setup programs.
+// - Teardown programs.
+// - Pre-test programs.
+// - Test programs.
+message Executable {
+  // A reference to an executable file contained in the inputs attribute of the
+  // build rule.
+  string file = 1;
+
+  // A list of arguments to be passed to the executable at runtime, before
+  // property substitution.
+  repeated string args = 2;
+
+  // A list of input files to be passed to the executable at runtime through the
+  // $_INPUT_FILES_DIR environment variable. These files are created by a
+  // previously run executable.
+  repeated SutFile input_files = 3;
+
+  // A list of properties which the executable must set. Not setting these exact
+  // properties results in an error.
+  repeated OutputProperty output_properties = 4;
+
+  // A list of files which the executable must create. Not creating these exact
+  // files results in an error.
+  repeated SutFile output_files = 5;
+}
+
+// A property that is output by an executable and can be used by subsequent
+// executables.
+message OutputProperty {
+  string key = 1;
+}
+
+// Contains information about a file that is created by an executable and can
+// be used by subsequent executables.
+
+message SutFile {
+  // The filename, relative to the directory given by the $_SETUP_OUTPUT_DIR
+  // environment variable. Currently this must be a top level file (no slashes
+  // in the path).
+  string filename = 1;
+}
+
+// Associates short names with SUT components. This alias is used to reference
+// properties and files provided by other SUTs.
+message SutComponentAlias {
+  // The 'real' name of the component an SUT component or integration test
+  // depends on. If using bazel, this will be the label of the sut_component
+  // target in the BUILD file.
+  string target = 1;
+
+  // The alias for the component dependency scoped to the current SUT component
+  // or test.
+  string local_alias = 2;
+}
