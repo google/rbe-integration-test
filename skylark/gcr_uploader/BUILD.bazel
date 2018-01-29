@@ -1,0 +1,14 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "generate_image_name.sh",
+    "create_and_upload_image.sh",
+    "delete_image.sh",
+])
+
+load(
+    ":gcr_uploader_tests.bzl",
+    "gcr_uploader_sut_component_test_suite",
+)
+
+gcr_uploader_sut_component_test_suite()

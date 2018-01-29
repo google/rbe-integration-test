@@ -102,7 +102,6 @@ def _sut_component_with_output_properties_test_impl(ctx):
                 "file: \"skylark/testdata/test_setup_script.sh\" " +
                 "output_properties {key: \"key_one\"}" +
               "} " +
-              "output_properties {key: \"key_one\"} " +
               "num_requested_ports: 1"]),
       provider.sut_protos)
   unittest.end(env)
@@ -136,7 +135,6 @@ def _sut_component_with_output_files_test_impl(ctx):
                 "file: \"skylark/testdata/test_setup_script.sh\" " +
                 "output_files {filename: \"file_one\"}" +
               "} " +
-              "output_files {filename: \"file_one\"} " +
               "num_requested_ports: 1"]),
       provider.sut_protos)
   unittest.end(env)
@@ -435,10 +433,6 @@ def _sut_component_with_input_files_test_impl(ctx):
             "output_files {filename: \"file3\"} " +
             "output_files {filename: \"file4\"}" +
           "} " +
-          "output_files {filename: \"file1\"} " +
-          "output_files {filename: \"file2\"} " +
-          "output_files {filename: \"file3\"} " +
-          "output_files {filename: \"file4\"} " +
           "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" " +
           "args: \"teardown_arg1\" " +
           "input_files {filename: \"file2\"} input_files {filename: \"file3\"}" +
@@ -595,8 +589,6 @@ def _external_sut_component_with_all_features_test_impl(ctx):
             "output_properties {key: \"prepare_property_one\"} " +
             "output_files {filename: \"prepare_file_one\"}" +
           "} " +
-          "output_properties {key: \"prepare_property_one\"} " +
-          "output_files {filename: \"prepare_file_one\"} " +
           "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" args: \"teardown_arg1\"} " +
           "docker_image: \"fakedocker:latest\" " +
           "sut_component_alias {target: \"//skylark:sut_node_component\" local_alias: \"slc\"} " +
@@ -610,9 +602,6 @@ def _external_sut_component_with_all_features_test_impl(ctx):
             "output_files {filename: \"output_file_one\"} " +
             "output_files {filename: \"output_file_two\"}" +
           "} " +
-          "output_properties {key: \"output_property_one\"} " +
-          "output_files {filename: \"output_file_one\"} " +
-          "output_files {filename: \"output_file_two\"} " +
           "docker_image: \"fakedocker:latest\" " +
           "sut_component_alias {target: \"//skylark:external_sut_component_with_all_features_subject_prepare\" local_alias: \"prep\"} " +
           "sut_component_alias {target: \"//skylark:sut_node_component\" local_alias: \"slc\"} num_requested_ports: 3"]),
@@ -779,8 +768,6 @@ def test_integration_test_with_suts():
             "output_files {filename: \"file1\"} " +
             "output_files {filename: \"file2\"}" +
           "} " +
-          "output_files {filename: \"file1\"} " +
-          "output_files {filename: \"file2\"} " +
           "teardowns {file: \"skylark/testdata/test_teardown_script.sh\"} " +
           "num_requested_ports: 1" +
         "} " +

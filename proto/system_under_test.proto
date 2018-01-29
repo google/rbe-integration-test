@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 package ascit.integrationtest;
+option java_package = "com.google.ascit.proto";
 
 //
 // This file contains the protocol buffer definitions used to communicate itest

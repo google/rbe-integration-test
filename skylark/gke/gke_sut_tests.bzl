@@ -2,14 +2,12 @@
 
 load(
     "//skylark:integration_tests.bzl",
-    "sut_component",
     "SutComponentInfo"
 )
 load(
     ":gke_sut.bzl",
     "gke_sut_component",
 )
-load("//skylark:sets.bzl", "sets")
 load("//skylark:unittest.bzl", "asserts", "unittest")
 load("//skylark:toolchains.bzl", "toolchain_container_images")
 
@@ -28,7 +26,6 @@ def _gke_sut_component_basic_test_impl(ctx):
             "file: \"skylark/gke/create_random_sequence.sh\" " +
             "output_properties {key: \"rand\"}" +
           "} " +
-          "output_properties {key: \"rand\"} " +
           "teardowns {" +
             "file: \"skylark/gke/gke_teardown.sh\" " +
             "args: \"--project=" + ctx.attr.gcp_project + "\" " +
@@ -59,10 +56,6 @@ def _gke_sut_component_basic_test_impl(ctx):
             "output_properties {key: \"ips\"}" +
             "".join([" output_properties {key: \"ip_%s\"}" % lb for lb in ctx.attr.load_balancers]) +
           "} " +
-          "output_properties {key: \"cluster_name\"} " +
-          "output_properties {key: \"namespace\"} " +
-          "output_properties {key: \"ips\"} " +
-          "".join(["output_properties {key: \"ip_%s\"} " % lb for lb in ctx.attr.load_balancers]) +
           "docker_image: \"" + toolchain_container_images()["rbe-integration-test"] + "\" " +
           "sut_component_alias {" +
           "target: \"" + ctx.attr.rule_name + "_prepare\" " +
@@ -101,7 +94,7 @@ gke_sut_component_basic_test = unittest.make(
            "gcp_zone": attr.string()}
 )
 
-def test_gke_sut_component_epheremal():
+def test_gke_sut_component_ephemeral():
   """Generates an ephemeral gke_sut_component."""
 
   cluster_name = "cluster-name-prefix"
@@ -111,7 +104,7 @@ def test_gke_sut_component_epheremal():
   gcp_zone = "us-east1-d"
 
   gke_sut_component(
-      name = "gke_sut_component_epheremal_subject",
+      name = "gke_sut_component_ephemeral_subject",
       cluster_name = cluster_name,
       ephemeral_cluster = True,
       k8s_yaml_files = [
@@ -124,9 +117,9 @@ def test_gke_sut_component_epheremal():
       gcp_zone = gcp_zone,
   )
 
-  gke_sut_component_basic_test(name = "gke_sut_component_epheremal",
-                               dep = "gke_sut_component_epheremal_subject",
-                               rule_name = "//skylark/gke:gke_sut_component_epheremal_subject",
+  gke_sut_component_basic_test(name = "gke_sut_component_ephemeral",
+                               dep = "gke_sut_component_ephemeral_subject",
+                               rule_name = "//skylark/gke:gke_sut_component_ephemeral_subject",
                                prepare = "create_random_sequence.sh",
                                setup = "gke_setup.sh",
                                teardown = "gke_teardown.sh",
@@ -145,7 +138,7 @@ def test_gke_sut_component_epheremal():
                                gcp_zone = gcp_zone,
                                ephemeral_cluster= True)
 
-def test_gke_sut_component_non_epheremal():
+def test_gke_sut_component_non_ephemeral():
   """Generates a non-ephemeral gke_sut_component."""
 
   cluster_name = "cluster-name"
@@ -154,7 +147,7 @@ def test_gke_sut_component_non_epheremal():
   gcp_zone = "us-east1-d"
 
   gke_sut_component(
-      name = "gke_sut_component_non_epheremal_subject",
+      name = "gke_sut_component_non_ephemeral_subject",
       cluster_name = cluster_name,
       ephemeral_cluster = False,
       create_cluster_if_necessary = False,
@@ -166,9 +159,9 @@ def test_gke_sut_component_non_epheremal():
       gcp_zone = gcp_zone,
   )
 
-  gke_sut_component_basic_test(name = "gke_sut_component_non_epheremal",
-                               dep = "gke_sut_component_non_epheremal_subject",
-                               rule_name = "//skylark/gke:gke_sut_component_non_epheremal_subject",
+  gke_sut_component_basic_test(name = "gke_sut_component_non_ephemeral",
+                               dep = "gke_sut_component_non_ephemeral_subject",
+                               rule_name = "//skylark/gke:gke_sut_component_non_ephemeral_subject",
                                prepare = "create_random_sequence.sh",
                                setup = "gke_setup.sh",
                                teardown = "gke_teardown.sh",
@@ -186,7 +179,7 @@ def test_gke_sut_component_non_epheremal():
                                create_cluster_if_necessary = False,
                                )
 
-def test_gke_sut_component_non_epheremal_with_create():
+def test_gke_sut_component_non_ephemeral_with_create():
   """Generates a non-ephemeral gke_sut_component with create_cluster_if_necessary."""
 
   cluster_name = "cluster-name"
@@ -195,7 +188,7 @@ def test_gke_sut_component_non_epheremal_with_create():
   gcp_zone = "us-east1-d"
 
   gke_sut_component(
-      name = "gke_sut_component_non_epheremal_with_create_subject",
+      name = "gke_sut_component_non_ephemeral_with_create_subject",
       cluster_name = cluster_name,
       ephemeral_cluster = False,
       create_cluster_if_necessary = True,
@@ -207,9 +200,9 @@ def test_gke_sut_component_non_epheremal_with_create():
       gcp_zone = gcp_zone,
   )
 
-  gke_sut_component_basic_test(name = "gke_sut_component_non_epheremal_with_create",
-                               dep = "gke_sut_component_non_epheremal_with_create_subject",
-                               rule_name = "//skylark/gke:gke_sut_component_non_epheremal_with_create_subject",
+  gke_sut_component_basic_test(name = "gke_sut_component_non_ephemeral_with_create",
+                               dep = "gke_sut_component_non_ephemeral_with_create_subject",
+                               rule_name = "//skylark/gke:gke_sut_component_non_ephemeral_with_create_subject",
                                prepare = "create_random_sequence.sh",
                                setup = "gke_setup.sh",
                                teardown = "gke_teardown.sh",
@@ -228,15 +221,15 @@ def test_gke_sut_component_non_epheremal_with_create():
                                )
 
 def gke_sut_component_test_suite():
-  test_gke_sut_component_epheremal()
-  test_gke_sut_component_non_epheremal()
-  test_gke_sut_component_non_epheremal_with_create()
+  test_gke_sut_component_ephemeral()
+  test_gke_sut_component_non_ephemeral()
+  test_gke_sut_component_non_ephemeral_with_create()
 
   native.test_suite(
       name = "gke_sut_component_test",
       tests = [
-          "gke_sut_component_epheremal",
-          "gke_sut_component_non_epheremal",
-          "gke_sut_component_non_epheremal_with_create",
+          "gke_sut_component_ephemeral",
+          "gke_sut_component_non_ephemeral",
+          "gke_sut_component_non_ephemeral_with_create",
       ],
   )

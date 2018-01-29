@@ -30,9 +30,6 @@ def _terraform_sut_component_basic_test_impl(ctx):
             "output_properties {key: \"address\"} " +
             "output_files {filename: \"terraform.tfplan\"}" +
           "} " +
-          "output_properties {key: \"sut_id\"} " +
-          "output_properties {key: \"address\"} " +
-          "output_files {filename: \"terraform.tfplan\"} " +
           "teardowns {" +
             "file: \"skylark/terraform/tf_teardown.sh\" " +
             "args: \"{sut_id}\" " +

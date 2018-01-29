@@ -118,13 +118,13 @@ def _verify_params(k8s_yaml_files, load_balancers, cluster_name,
   _verify_cluster_create_flags(cluster_create_flags)
   _verify_cluster_correctness(cluster_name, ephemeral_cluster)
 
-def _is_list_of_strings(l):
+def _is_list_of_strings(potential_list):
   # isinstance is not supported in skylark
   # pylint: disable=unidiomatic-typecheck
-  if type(l) != "list":
+  if type(potential_list) != "list":
     return False
 
-  for item in l:
+  for item in potential_list:
     # isinstance is not supported in skylark
     # pylint: disable=unidiomatic-typecheck
     if type(item) != "string":

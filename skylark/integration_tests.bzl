@@ -91,12 +91,6 @@ def _sut_component_rule_impl(ctx):
   trans_setup = depset([])
   for setup in ctx.attr.setups:
     out_proto_list.append("setups {%s}" % setup[ItExecutableInfo].executable_proto)
-
-    for key in setup[ItExecutableInfo].output_properties:
-      out_proto_list.append("output_properties {key: \"%s\"}" % key)
-    for fname in setup[ItExecutableInfo].output_files:
-      out_proto_list.append("output_files {filename: \"%s\"}" % fname)
-
     trans_setup += depset([setup[ItExecutableInfo].program_file])
     # Add the data files specified in the setup ItExecutableInfo and in its
     # target.
