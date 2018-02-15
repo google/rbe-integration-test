@@ -28,18 +28,14 @@ ItExecutableInfo = provider(
         "output_properties",
         "output_files",
         "executable_proto",
-        "timeout_seconds",
     ],
 )
-
-DEFAULT_EXECUTABLE_TIMEOUT_SECONDS = 30
 
 def _integration_test_executable_impl(ctx):
   # Create an Executable proto message from ctx.attr.program, ctx.attr.args and
   # ctx.attr.input_files. This proto message is from system_under_test.proto.
-  executable_proto = "file: \"%s\"%s%s%s%s%s" % (
+  executable_proto = "file: \"%s\"%s%s%s%s" % (
       ctx.executable.program.short_path,
-      " timeout_seconds: %d" % ctx.attr.timeout_seconds,
       "".join([" args: \"%s\"" % ctx.expand_location(arg) for arg in ctx.attr.args]),
       "".join([" input_files {filename: \"%s\"}" % fname for fname in ctx.attr.input_files]),
       "".join([" output_properties {key: \"%s\"}" % fname for fname in ctx.attr.output_properties]),
@@ -50,8 +46,7 @@ def _integration_test_executable_impl(ctx):
                            data = depset(ctx.files.data),
                            output_properties = ctx.attr.output_properties,
                            output_files = ctx.attr.output_files,
-                           executable_proto = executable_proto,
-                           timeout_seconds = ctx.attr.timeout_seconds)]
+                           executable_proto = executable_proto)]
 
 # Private rule to be used only from the sut_component macro.
 _integration_test_executable = rule(
@@ -62,7 +57,6 @@ _integration_test_executable = rule(
             executable = True,
             cfg = "target",
         ),
-        "timeout_seconds": attr.int(default=DEFAULT_EXECUTABLE_TIMEOUT_SECONDS),
         "args": attr.string_list(),
         "input_files": attr.string_list(),
         "data": attr.label_list(allow_files = True),
@@ -95,12 +89,12 @@ PREPARE_PHASE_SUFFIX = "_prepare"
 INTEGRATION_TEST_CONFIG_ENV_VAR = "IntegrationTestConfig"
 INTEGRATION_TEST_TYPE_ENV_VAR = "IntegrationTestType"
 
-def _get_transitive_sutcs(sut_deps):
+def _get_transitive_sutcs(required_sut_components):
   trans_sut_proto = depset()
   trans_setup = depset()
   trans_teardown = depset()
   trans_data = depset()
-  for sutc in sut_deps:
+  for sutc in required_sut_components:
     trans_sut_proto += sutc[SutComponentInfo].sut_protos
     trans_setup += sutc[SutComponentInfo].setups
     trans_teardown += sutc[SutComponentInfo].teardowns
@@ -136,15 +130,15 @@ def _sut_component_rule_impl(ctx):
     out_proto_list.append(
         "docker_image: \"%s\"" % ctx.attr.docker_image)
 
-  for sutc_key in ctx.attr.sut_deps:
+  for sutc_key in ctx.attr.required_sut_components:
     out_proto_list.append("sut_component_alias {target: \"%s\" local_alias: \"%s\"}"
-                          % (sutc_key.label, ctx.attr.sut_deps[sutc_key]))
+                          % (sutc_key.label, ctx.attr.required_sut_components[sutc_key]))
 
   out_proto_list.append("num_requested_ports: %d" % ctx.attr.num_requested_ports)
 
   trans_sut_proto = depset([" ".join(out_proto_list)])
 
-  trans_sutcs = _get_transitive_sutcs(ctx.attr.sut_deps)
+  trans_sutcs = _get_transitive_sutcs(ctx.attr.required_sut_components)
   trans_sut_proto += trans_sutcs.sut_protos
   trans_data += trans_sutcs.data
   trans_setup += trans_sutcs.setups
@@ -161,7 +155,7 @@ _sut_component = rule(
         "setups": attr.label_list(providers = [ItExecutableInfo]),
         "teardowns": attr.label_list(providers = [ItExecutableInfo]),
         "docker_image": attr.string(),
-        "sut_deps": attr.label_keyed_string_dict(
+        "required_sut_components": attr.label_keyed_string_dict(
             providers = [SutComponentInfo],
             cfg = "target"),
         "num_requested_ports": attr.int(default=1),
@@ -182,9 +176,7 @@ def _create_integration_test_executable(
       target name for the _integration_test_executable.
     executable: Can be either a string, which is interpretted as a program,
       or a dictionary that has a mandatory "program" field (whose value is a
-      string), and some optional fields. If a string is provided or if the
-      optional field 'timeout_seconds' is not provided, it will default to
-      DEFAULT_EXECUTABLE_TIMEOUT_SECONDS.
+      string), and some optional fields.
 
   Returns:
     The target name of the _integration_test_executable rule.
@@ -211,12 +203,11 @@ def _create_integration_test_executable(
     fail("Error in target %s: %s is neither a string nor a dictionary." % (orig_target_name, target_suffix))
 
   for key in executable:
-    if key not in ["program", "args", "input_files", "data", "deps", "output_properties", "output_files", "timeout_seconds"]:
+    if key not in ["program", "args", "input_files", "data", "deps", "output_properties", "output_files"]:
       fail("Error in target %s: %s has an invalid key %s." % (orig_target_name, target_suffix, key))
 
   _integration_test_executable(
       name = target_name,
-      timeout_seconds = executable.get("timeout_seconds"),
       program = executable.get("program"),
       args = executable.get("args"),
       input_files = executable.get("input_files"),
@@ -265,7 +256,7 @@ def sut_component(
     setups = None,
     teardowns = None,
     docker_image = "",
-    sut_deps = {}, num_requested_ports = 1):
+    required_sut_components = {}, num_requested_ports = 1):
   """Macro definition that expresses an sut_component.
 
   Behind the scenes, it creates _integration_test_executable rules for setup and
@@ -278,7 +269,8 @@ def sut_component(
     teardowns: An array of teardown executables (see executables in
       _create_integration_test_executables)
     docker_image: The setup and teardown will be run inside this docker image.
-    sut_deps: Dictionary mapping names of dependent SUTs to their aliases.
+    required_sut_components: Dictionary mapping names of dependent SUTs to their
+      aliases.
     num_requested_ports: The number of ports requested for inter-SUT
       communication.
   """
@@ -294,7 +286,7 @@ def sut_component(
       setups = setup_targets,
       teardowns = teardown_targets,
       docker_image = docker_image,
-      sut_deps = sut_deps,
+      required_sut_components = required_sut_components,
       num_requested_ports = num_requested_ports
   )
 
@@ -305,7 +297,7 @@ def external_sut_component(
     setups = None,
     teardowns = None,
     docker_image = "",
-    sut_deps = {}, num_requested_ports = 1):
+    required_sut_components = {}, num_requested_ports = 1):
   """Macro definition that expresses an external_sut_component.
 
   It expresses external_sut_component as two sut_component bzl targets.
@@ -318,7 +310,7 @@ def external_sut_component(
     setups: The scripts to run during the setup phase.
     teardowns: The script to run during the teardown phase.
     docker_image: If provided, the SUT will be run inside the docker image.
-    sut_deps: Dictionary mapping names of dependent SUTs to their
+    required_sut_components: Dictionary mapping names of dependent SUTs to their
         aliases.
     num_requested_ports: The number of ports requested for inter-SUT
         communication.
@@ -326,25 +318,22 @@ def external_sut_component(
 
   # The user cannot map an sut to "prep". We are using that name internally as
   # an alias to the prep sut.
-  if "prep" in sut_deps.values():
+  if "prep" in required_sut_components.values():
     fail("'prep' is an invalid sut alias, please choose a different name.")
-
-  sut_deps_with_prep = {":" + name + PREPARE_PHASE_SUFFIX: "prep"}
-  sut_deps_with_prep.update(sut_deps)
 
   sut_component(
       name = name + PREPARE_PHASE_SUFFIX,
       setups = prepares,
       teardowns = teardowns,
       docker_image = docker_image,
-      sut_deps = sut_deps,
+      required_sut_components = required_sut_components,
       num_requested_ports = 0,
   )
   sut_component(
       name = name,
       setups = setups,
       docker_image = docker_image,
-      sut_deps = sut_deps_with_prep,
+      required_sut_components = required_sut_components + {":" + name + PREPARE_PHASE_SUFFIX: "prep"},
       num_requested_ports = num_requested_ports,
   )
 
@@ -373,14 +362,14 @@ def _integration_test_impl(ctx):
   # Collect the SUT component definition protos in a depset so there are no
   # duplicates.
   sutc_protos = depset()
-  for sutc in ctx.attr.sut_deps:
+  for sutc in ctx.attr.suts:
     transitive_data_files += sutc[SutComponentInfo].setups
     transitive_data_files += sutc[SutComponentInfo].teardowns
     transitive_data_files += sutc[SutComponentInfo].data
     for sutc_proto in sutc[SutComponentInfo].sut_protos:
       sutc_protos += ["components {%s}" % sutc_proto]
     config_proto_list.append("sut_component_alias {target: \"%s\" local_alias: \"%s\"}" %
-                             (sutc.label, ctx.attr.sut_deps[sutc]))
+                             (sutc.label, ctx.attr.suts[sutc]))
 
   for sutc_proto in sutc_protos.to_list():
     config_proto_list.append(sutc_proto)
@@ -449,7 +438,7 @@ _integration_test = rule(
             mandatory=True,
             providers = [ItExecutableInfo],
         ),
-        "sut_deps": attr.label_keyed_string_dict(cfg = "target"),
+        "suts": attr.label_keyed_string_dict(cfg = "target"),
 
         "test_type": attr.string(
             default = "SingleMachine",
@@ -467,7 +456,7 @@ def integration_test(
     name,
     test,
     pretests = None,
-    sut_deps = None,
+    suts = None,
     test_type = None,
     test_docker_image = None,
     test_timeout = None,
@@ -483,7 +472,7 @@ def integration_test(
       _create_integration_test_executable).
     pretests: An array of pretest executables (see executables in
       _create_integration_test_executables)
-    sut_deps: Dictionary mapping names of dependent SUTs to their aliases.
+    suts: Dictionary mapping names of dependent SUTs to their aliases.
     test_type: (to deprecate) "SingleMachine" or "MultiMachine".
     test_docker_image: The pretests and test will be run inside this docker image.
     test_timeout: Timeout of the test.
@@ -498,7 +487,7 @@ def integration_test(
       name = name,
       pretests = pretest_targets,
       test = test_target,
-      sut_deps = sut_deps,
+      suts = suts,
       test_type = test_type,
       test_docker_image = test_docker_image,
       test_timeout = test_timeout,

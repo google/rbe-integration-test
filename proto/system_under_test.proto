@@ -18,7 +18,7 @@ option java_package = "com.google.ascit.proto";
 // This could be a single machine running an individual binary, or a Docker
 // image deployed to the cloud.
 //
-// Next ID: 9
+// Next ID: 8
 message SutComponent {
   // The name of the component, this will correspond to the name field of the
   // sut_component target in the BUILD file.
@@ -36,12 +36,6 @@ message SutComponent {
   // teardown scripts should run.
   string docker_image = 4;
 
-  // A list of strings which are the set of properties that this SUT component
-  // must set during the setup phase. It is a setup error if these properties
-  // are not set after setup.
-
-  repeated OutputProperty output_properties = 5 [deprecated = true];
-
   // The SUT components this component directly depends on, along with the alias
   // for each component (for scoping the key-value properties produced by the
   // setup of each component).
@@ -49,12 +43,6 @@ message SutComponent {
 
   // The number of external ports required by this SUT component.
   int32 num_requested_ports = 7;
-
-  // A list of files which are expected to be created by this SUT
-  // component. Similar to output_properties, if these files are not created
-  // after the setup, it will be considered a setup error.
-
-  repeated SutFile output_files = 8 [deprecated = true];
 }
 
 // IntegrationTestConfiguration lists all the SUT components needed to be able
@@ -104,6 +92,8 @@ message IntegrationTestConfiguration {
 // - Teardown programs.
 // - Pre-test programs.
 // - Test programs.
+//
+// Next ID: 7
 message Executable {
   // A reference to an executable file contained in the inputs attribute of the
   // build rule.
@@ -125,6 +115,10 @@ message Executable {
   // A list of files which the executable must create. Not creating these exact
   // files results in an error.
   repeated SutFile output_files = 5;
+
+  // For Setup Executables, it means how much time it has to complete setup.
+  // For all other executables, it means how much time it has to run.
+  uint64 timeout_seconds = 6;
 }
 
 // A property that is output by an executable and can be used by subsequent

@@ -14,27 +14,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-USAGE="Usage: $0 --base_image=base_image --directory=directory --files=file1,file2,... --new_image=new_image"
+USAGE="Usage: $0 --base_image base_image --directory directory --file file1 [--file file2] ... --new_image new_image"
 
-# Parse arguments. Expect key and value to appear as a single argument with an
-# equal sign. So "--key=value" and not "--key value".
+# Parse arguments. Expect key and value to appear as a separate arguments.
+# So "--key" "value" and not "--key=value".
 parse_args() {
-  for i in "$@"; do
+  while [[ $# > 0 ]]; do
+    i="$1"
     case $i in
-        --base_image=*)
-        BASE_IMAGE="${i#*=}"
+        --base_image)
+        shift
+        BASE_IMAGE="$1"
         shift
         ;;
-        --directory=*)
-        DIRECTORY="${i#*=}"
+        --directory)
+        shift
+        DIRECTORY="$1"
         shift
         ;;
-        --files=*)
-        FILES_CSV="${i#*=}"
+        --file)
+        shift
+        FILES+=("$1")
         shift
         ;;
-        --new_image=*)
-        NEW_IMAGE="${i#*=}"
+        --new_image)
+        shift
+        NEW_IMAGE="$1"
         shift
         ;;
         *)
@@ -51,7 +56,7 @@ parse_args() {
     echo "Missing directory"
     return 1
   fi
-  if [[ "$FILES_CSV" == "" ]]; then
+  if [[ ${#FILES[@]} == 0 ]]; then
     echo "Missing files"
     return 1
   fi
@@ -74,7 +79,6 @@ GCLOUD_BIN="gcloud"
 DOCKER_BIN="docker"
 
 echo "Checking that files exist ..."
-IFS=, read -r -a FILES <<<"$FILES_CSV"
 for FILE in "${FILES[@]}"; do
   if [ ! -f "$FILE" ]; then
     echo "File $FILE does not exist"

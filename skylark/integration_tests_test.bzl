@@ -4,7 +4,7 @@ load(
     ":integration_tests.bzl",
     "INTEGRATION_TEST_CONFIG_ENV_VAR",
     "INTEGRATION_TEST_TYPE_ENV_VAR",
-    "IntegrationTestInfoForTest",
+    "IntegrationTestInfoForTestInfo",
     "SutComponentInfo",
     "external_sut_component",
     "integration_test",
@@ -100,6 +100,7 @@ def _sut_component_with_output_properties_test_impl(ctx):
       depset(["name: \"//skylark:sut_component_with_output_properties_subject\" " +
               "setups {" +
                 "file: \"skylark/testdata/test_setup_script.sh\" " +
+                "timeout_seconds: 30 " +
                 "output_properties {key: \"key_one\"}" +
               "} " +
               "num_requested_ports: 1"]),
@@ -122,6 +123,39 @@ def test_sut_component_with_output_properties():
       name = "sut_component_with_output_properties",
       dep = "sut_component_with_output_properties_subject")
 
+# _sut_component_with_timeout tests the sut_component rule has an executable
+# with an expected timeout.
+def _sut_component_with_timeout_test_impl(ctx):
+  env = unittest.begin(ctx)
+  provider = ctx.attr.dep[SutComponentInfo]
+  asserts.set_equals(env, depset([]), provider.data)
+  asserts.set_equals(
+      env,
+      depset(["name: \"//skylark:sut_component_with_timeout_subject\" " +
+              "setups {" +
+                "file: \"skylark/testdata/test_setup_script.sh\" " +
+                "timeout_seconds: 15" +
+              "} " +
+              "num_requested_ports: 1"]),
+      provider.sut_protos)
+  unittest.end(env)
+
+sut_component_with_timeout_test = unittest.make(
+    _sut_component_with_timeout_test_impl,
+    attrs = {"dep": attr.label()},
+)
+
+def test_sut_component_with_timeout():
+  sut_component(name = "sut_component_with_timeout_subject",
+                setups = [{
+                    "program" : "testdata/test_setup_script.sh",
+                    "timeout_seconds" : 15,
+                }])
+
+  sut_component_with_timeout_test(
+      name = "sut_component_with_timeout",
+      dep = "sut_component_with_timeout_subject")
+
 # sut_component_with_output_files tests the sut_component rule when there is
 # a set of expected output_files in the rule.
 def _sut_component_with_output_files_test_impl(ctx):
@@ -133,6 +167,7 @@ def _sut_component_with_output_files_test_impl(ctx):
       depset(["name: \"//skylark:sut_component_with_output_files_subject\" " +
               "setups {" +
                 "file: \"skylark/testdata/test_setup_script.sh\" " +
+                "timeout_seconds: 30 " +
                 "output_files {filename: \"file_one\"}" +
               "} " +
               "num_requested_ports: 1"]),
@@ -166,12 +201,12 @@ def _sut_component_transitive_with_scripts_test_impl(ctx):
       depset([
           # Proto corresponding to sut_leaf_component
           "name: \"//skylark:sut_leaf_component\" " +
-          "setups {file: \"skylark/testdata/test_setup_script.sh\"} " +
+          "setups {file: \"skylark/testdata/test_setup_script.sh\" timeout_seconds: 30} " +
           "num_requested_ports: 1",
           # Proto corresponding to sut_component_transitive_with_scripts_subject
           "name: \"//skylark:sut_component_transitive_with_scripts_subject\" " +
-          "setups {file: \"skylark/testdata/test_setup2_script.sh\"} " +
-          "teardowns {file: \"skylark/testdata/test_teardown_script.sh\"} " +
+          "setups {file: \"skylark/testdata/test_setup2_script.sh\" timeout_seconds: 30} " +
+          "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" timeout_seconds: 30} " +
           "sut_component_alias {target: \"//skylark:sut_leaf_component\" local_alias: \"slc\"} " +
           "num_requested_ports: 1"]),
       provider.sut_protos)
@@ -203,7 +238,7 @@ def test_sut_component_transitive_with_scripts():
                     "data" : ["testdata/data.txt"],
                 }])
   sut_component(name = "sut_component_transitive_with_scripts_subject",
-                required_sut_components = {":sut_leaf_component": "slc"},
+                sut_deps = {":sut_leaf_component": "slc"},
                 setups = ["testdata/test_setup2_script.sh"],
                 teardowns = ["testdata/test_teardown_script.sh"],
                )
@@ -263,16 +298,16 @@ def test_sut_component_diamond():
   """Generates subject and test rules for a sut_component unit test."""
   sut_component(name = "sut_diamond_leaf_component")
   sut_component(name = "sut_diamond_left_component",
-                required_sut_components = {
+                sut_deps = {
                     ":sut_diamond_leaf_component": "leaf",
                 })
   sut_component(name = "sut_diamond_right_component",
-                required_sut_components = {
+                sut_deps = {
                     ":sut_diamond_leaf_component": "leaf",
                 })
   sut_component(name = "sut_component_diamond_subject",
                 # Does not depend directly on the leaf.
-                required_sut_components = {
+                sut_deps = {
                     ":sut_diamond_left_component": "left",
                     ":sut_diamond_right_component": "right",
                 })
@@ -314,8 +349,8 @@ def _sut_component_with_rules_test_impl(ctx):
       env,
       depset([
           "name: \"//skylark:sut_component_with_rules_subject\" " +
-          "setups {file: \"skylark/setup\"} " +
-          "teardowns {file: \"skylark/teardown\"} " +
+          "setups {file: \"skylark/setup\" timeout_seconds: 30} " +
+          "teardowns {file: \"skylark/teardown\" timeout_seconds: 30} " +
           "num_requested_ports: 1"]),
       provider.sut_protos)
 
@@ -368,9 +403,9 @@ def _sut_component_with_args_test_impl(ctx):
       env,
       depset([
           "name: \"//skylark:sut_component_with_args_subject\" " +
-          "setups {file: \"skylark/testdata/test_setup_script.sh\" " +
+          "setups {file: \"skylark/testdata/test_setup_script.sh\" timeout_seconds: 30 " +
           "args: \"setup_arg1\" args: \"skylark/testdata/data.txt\"} " +
-          "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" " +
+          "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" timeout_seconds: 30 " +
           "args: \"teardown_arg1\"} " +
           "num_requested_ports: 1"]),
       provider.sut_protos)
@@ -425,6 +460,7 @@ def _sut_component_with_input_files_test_impl(ctx):
           "name: \"//skylark:sut_component_with_input_files_subject\" " +
           "setups {" +
             "file: \"skylark/testdata/test_setup_script.sh\" " +
+            "timeout_seconds: 30 " +
             "args: \"setup_arg1\" args: \"skylark/testdata/data.txt\" " +
             "input_files {filename: \"file1\"} " +
             "input_files {filename: \"file2\"} " +
@@ -434,8 +470,9 @@ def _sut_component_with_input_files_test_impl(ctx):
             "output_files {filename: \"file4\"}" +
           "} " +
           "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" " +
-          "args: \"teardown_arg1\" " +
-          "input_files {filename: \"file2\"} input_files {filename: \"file3\"}" +
+            "timeout_seconds: 30 " +
+            "args: \"teardown_arg1\" " +
+            "input_files {filename: \"file2\"} input_files {filename: \"file3\"}" +
           "} " +
           "num_requested_ports: 1"
       ]), provider.sut_protos)
@@ -489,11 +526,12 @@ def _sut_component_with_multiple_scripts_test_impl(ctx):
       depset([
           "name: \"//skylark:sut_component_with_multiple_scripts_subject\" " +
           "setups {file: \"skylark/testdata/test_setup_script.sh\" " +
-          "args: \"setup_arg1\" args: \"skylark/testdata/data.txt\" " +
-          "input_files {filename: \"file1\"} input_files {filename: \"file2\"}" +
+            "timeout_seconds: 30 " +
+            "args: \"setup_arg1\" args: \"skylark/testdata/data.txt\" " +
+            "input_files {filename: \"file1\"} input_files {filename: \"file2\"}" +
           "} " +
-          "setups {file: \"skylark/testdata/test_setup2_script.sh\"} " +
-          "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" " +
+          "setups {file: \"skylark/testdata/test_setup2_script.sh\" timeout_seconds: 30} " +
+          "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" timeout_seconds: 30 " +
           "args: \"teardown_arg1\"} " +
           "num_requested_ports: 1"
       ]), provider.sut_protos)
@@ -585,11 +623,12 @@ def _external_sut_component_with_all_features_test_impl(ctx):
           "name: \"//skylark:external_sut_component_with_all_features_subject_prepare\" " +
           "setups {" +
             "file: \"skylark/testdata/test_prepare_script.sh\" " +
+            "timeout_seconds: 30 " +
             "args: \"prepare_arg1\" " +
             "output_properties {key: \"prepare_property_one\"} " +
             "output_files {filename: \"prepare_file_one\"}" +
           "} " +
-          "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" args: \"teardown_arg1\"} " +
+          "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" timeout_seconds: 30 args: \"teardown_arg1\"} " +
           "docker_image: \"fakedocker:latest\" " +
           "sut_component_alias {target: \"//skylark:sut_node_component\" local_alias: \"slc\"} " +
           "num_requested_ports: 0",
@@ -597,6 +636,7 @@ def _external_sut_component_with_all_features_test_impl(ctx):
           "name: \"//skylark:external_sut_component_with_all_features_subject\" "+
           "setups {" +
             "file: \"skylark/testdata/test_setup_script.sh\" " +
+            "timeout_seconds: 30 " +
             "args: \"setup_arg1\" " +
             "output_properties {key: \"output_property_one\"} " +
             "output_files {filename: \"output_file_one\"} " +
@@ -645,7 +685,7 @@ def  test_external_sut_component_with_all_features():
           "args" : ["teardown_arg1"],
       }],
       docker_image = "fakedocker:latest",
-      required_sut_components = {":sut_node_component": "slc"},
+      sut_deps = {":sut_node_component": "slc"},
       num_requested_ports = 3
   )
   external_sut_component_with_all_features_test(
@@ -683,7 +723,7 @@ def _integration_test_test_impl(ctx):
                       "<generated file skylark/integration_test_subject> is expected.")
 
 
-  provider = ctx.attr.dep[IntegrationTestInfoForTest]
+  provider = ctx.attr.dep[IntegrationTestInfoForTestInfo]
   if ctx.attr.config_proto != "":
     asserts.equals(env, ctx.attr.config_proto, provider.environment[INTEGRATION_TEST_CONFIG_ENV_VAR])
   asserts.equals(env, ctx.attr.test_type, provider.environment[INTEGRATION_TEST_TYPE_ENV_VAR])
@@ -741,7 +781,7 @@ def test_integration_test_with_suts():
           "input_files" : ["file1"],
           "data" : ["testdata/data.txt"],
       },
-      suts = {":integration_test_sut": "sits"},
+      sut_deps = {":integration_test_sut": "sits"},
       test_timeout = 10,
       tags = ["manual"],
   )
@@ -765,16 +805,18 @@ def test_integration_test_with_suts():
           "name: \"//skylark:integration_test_sut\" " +
           "setups {" +
             "file: \"skylark/testdata/test_setup_script.sh\" " +
+            "timeout_seconds: 30 " +
             "output_files {filename: \"file1\"} " +
             "output_files {filename: \"file2\"}" +
           "} " +
-          "teardowns {file: \"skylark/testdata/test_teardown_script.sh\"} " +
+          "teardowns {file: \"skylark/testdata/test_teardown_script.sh\" timeout_seconds: 30} " +
           "num_requested_ports: 1" +
         "} " +
         "timeout_seconds: \"10\" " +
         "test_type: SINGLE_MACHINE " +
         "test_executable {" +
           "file: \"skylark/testdata/test_script.txt\" " +
+          "timeout_seconds: 30 " +
           "args: \"arg1\" args: \"arg2\" " +
           "input_files {filename: \"file1\"}" +
         "}"
@@ -811,11 +853,12 @@ def test_integration_test_with_pretests():
         "test_type: SINGLE_MACHINE " +
         "pretest_executables {" +
           "file: \"skylark/testdata/test_setup_script.sh\" " +
+          "timeout_seconds: 30 " +
           "args: \"arg1\" args: \"arg2\" " +
           "input_files {filename: \"file1\"}" +
         "} " +
-        "pretest_executables {file: \"skylark/testdata/test_setup2_script.sh\"} " +
-        "test_executable {file: \"skylark/testdata/test_script.txt\"}"
+        "pretest_executables {file: \"skylark/testdata/test_setup2_script.sh\" timeout_seconds: 30} " +
+        "test_executable {file: \"skylark/testdata/test_script.txt\" timeout_seconds: 30}"
       ),
   )
 
@@ -823,17 +866,17 @@ def test_integration_test_with_diamond_deps():
   """Generates test rules for an integration_test with a diamond dependency."""
   sut_component(name = "integration_test_with_diamond_deps_leaf_sutc")
   sut_component(name = "integration_test_with_diamond_deps_left_sutc",
-                required_sut_components = {
+                sut_deps = {
                     ":integration_test_with_diamond_deps_leaf_sutc": "leaf",
                 })
   sut_component(name = "integration_test_with_diamond_deps_right_sutc",
-                required_sut_components = {
+                sut_deps = {
                     ":integration_test_with_diamond_deps_leaf_sutc": "leaf",
                 })
   integration_test(
       name = "test_integration_test_with_diamond_deps_subject",
       test = "testdata/test_script.txt",
-      suts = {
+      sut_deps = {
           ":integration_test_with_diamond_deps_left_sutc": "left",
           ":integration_test_with_diamond_deps_right_sutc": "right",
       },
@@ -885,7 +928,7 @@ def test_integration_test_with_diamond_deps():
           "timeout_seconds: \"10\" " +
           "test_type: MULTI_MACHINE " +
           "test_executable {" +
-            "file: \"skylark/testdata/test_script.txt\"" +
+            "file: \"skylark/testdata/test_script.txt\" timeout_seconds: 30" +
           "}"
       ),
       test_type = "MULTI_MACHINE",
@@ -915,6 +958,7 @@ def sut_component_test_suite():
   test_sut_component_with_input_files()
   test_sut_component_with_multiple_scripts()
   test_sut_component_with_output_properties()
+  test_sut_component_with_timeout()
   test_sut_component_with_output_files()
 
   native.test_suite(

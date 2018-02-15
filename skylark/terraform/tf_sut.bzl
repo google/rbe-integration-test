@@ -3,7 +3,7 @@
 load("//skylark:toolchains.bzl", "toolchain_container_images")
 load("//skylark:integration_tests.bzl", "sut_component")
 
-def terraform_sut_component(name, tf_files):
+def terraform_sut_component(name, tf_files, setup_timeout_seconds=None, teardown_timeout_seconds=None):
   # Create a list of terraform file locations.
   tf_files_loc = ",".join(["$(location %s)" % tf_file for tf_file in tf_files])
 
@@ -25,6 +25,7 @@ def terraform_sut_component(name, tf_files):
           "output_files" : [
               "terraform.tfplan",
           ],
+          "timeout_seconds" : setup_timeout_seconds,
       }],
       teardowns = [{
           "program" : str(Label("//skylark/terraform:tf_teardown.sh")),
@@ -34,5 +35,6 @@ def terraform_sut_component(name, tf_files):
           "input_files" : [
               "{terraform.tfplan}",
           ],
+          "timeout_seconds" : teardown_timeout_seconds,
       }],
   )

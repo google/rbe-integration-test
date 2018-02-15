@@ -12,23 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Skylark extension for GCR image uploading."""
+"""Skylark extension for docker image uploading."""
 
 load("//skylark:toolchains.bzl", "toolchain_container_images")
 load("//skylark:integration_tests.bzl", "external_sut_component")
 
-def gcr_uploader_sut_component(
+def image_uploader_sut_component(
     name,
     base_image,
     directory,
     files,
-    project_id,
-    image_name):
-  """SUT that uploads a docker image to GCR and then deletes it.
+    registry,
+    repository):
+  """SUT that uploads a docker image to a repository and then deletes it.
 
-  gcr_uploader_sut_component is a skylark macro that wraps an
-  external_sut_component which uploads a docker image to GCR and deletes it at
-  teardown.
+  image_uploader_sut_component is a skylark macro that wraps an
+  external_sut_component which uploads a docker image to an image registry and
+  deletes it at teardown.
 
   Args:
     name: The name of the SUT.
@@ -37,17 +37,22 @@ def gcr_uploader_sut_component(
                be copied into this directory to create the new image.
     files: Files to be copied to base_image. The files' name (after removing the
            directory names) must be unique.
-    project_id: The GCP project.
-    image_name: The new image name.
+    registry: Currently, only gcr.io is supported.
+    repository: The repsitory name (i.e. <project_id>/<image_name>).
   """
+
+  if registry != "gcr.io":
+    fail("Error: currently only registry = \"gcr.io\" is supported.")
 
   _verify_files(files)
 
-  file_csv = ",".join(["$(rootpath %s)" % file for file in files])
+  file_args = []
+  for f in files:
+    file_args+=["--file", "$(rootpath %s)" % f]
 
   bi = base_image[9:] if base_image.startswith("docker://") else base_image
   if not bi.startswith("gcr.io/"):
-    fail("Error: base_image %s must start with \"gcr.io\". That is the only repository currently supported." % base_image)
+    fail("Error: base_image %s must start with \"gcr.io\". That is the only registry currently supported." % base_image)
 
   # Creating the underlying external_sut_component rule.
   # The prepare stage creates an image name which is necessary for guaranteed
@@ -56,30 +61,33 @@ def gcr_uploader_sut_component(
       name = name,
       docker_image = toolchain_container_images()["rbe-integration-test"],
       prepares = [{
-          "program" : str(Label("//skylark/gcr_uploader:generate_image_name.sh")),
+          "program" : str(Label("//skylark/image_uploader:generate_image_name.sh")),
           "args" : [
-              "--project_id=" + project_id,
-              "--image_name=" + image_name,
+              "--registry", registry,
+              "--repository", repository,
           ],
           "output_properties" : ["image"],
+          "timeout_seconds" : 3,
       }],
       setups = [{
-          "program" : str(Label("//skylark/gcr_uploader:create_and_upload_image.sh")),
+          "program" : str(Label("//skylark/image_uploader:create_and_upload_image.sh")),
           "args" : [
-              "--base_image=" + bi,
-              "--directory=" + directory,
-              "--files=" + file_csv,
-              "--new_image={prep#image}",
+              "--base_image", bi,
+              "--directory", (directory if directory[-1:] == "/" else directory + "/")
+          ] + file_args + [
+              "--new_image", "{prep#image}",
           ],
           "data" : files,
           "deps" : files,
           "output_properties" : [
               "image", # The image we get from prep plus a SHA key.
           ],
+          "timeout_seconds" : 600,
       }],
       teardowns = [{
-          "program" : str(Label("//skylark/gcr_uploader:delete_image.sh")),
+          "program" : str(Label("//skylark/image_uploader:delete_image.sh")),
           "args" : ["{image}"],
+          "timeout_seconds" : 60,
       }],
   )
 

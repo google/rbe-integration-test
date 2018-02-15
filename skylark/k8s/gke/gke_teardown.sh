@@ -14,27 +14,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-USAGE="Usage: $0 --project=gcp_project_name --zone=zone --cluster_name=cluster_name --namespace=namespace [--ephemeral_cluster]"
+USAGE="Usage: $0 --project gcp_project_name --zone zone --cluster_name cluster_name --namespace namespace [--ephemeral_cluster]"
 
-# Parse arguments. Expect key and value to appear as a single argument with an
-# equal sign. So "--key=value" and not "--key value".
+# Parse arguments. Expect key and value to appear as a separate arguments.
+# So "--key" "value" and not "--key=value".
 parse_args() {
-  for i in "$@"; do
+  while [[ $# > 0 ]]; do
+    i="$1"
     case $i in
-        --project=*)
-        GCLOUD_PROJECT_NAME="${i#*=}"
+        --project)
+        shift
+        GCLOUD_PROJECT_NAME="$1"
         shift
         ;;
-        --zone=*)
-        ZONE="${i#*=}"
+        --zone)
+        shift
+        ZONE="$1"
         shift
         ;;
-        --cluster_name=*)
-        CLUSTER_NAME="${i#*=}"
+        --cluster_name)
+        shift
+        CLUSTER_NAME="$1"
         shift
         ;;
-        --namespace=*)
-        NAMESPACE="${i#*=}"
+        --namespace)
+        shift
+        NAMESPACE="$1"
         shift
         ;;
         --ephemeral_cluster)

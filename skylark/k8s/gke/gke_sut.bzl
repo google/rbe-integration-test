@@ -5,25 +5,82 @@ load("//skylark:integration_tests.bzl", "external_sut_component")
 
 def gke_sut_component(
     name,
-    gcp_project,
-    gcp_zone,
-    cluster_name,
+    gke_cluster_info,
     k8s_yaml_files = [],
     load_balancers = [],
-    ephemeral_cluster = False,
-    create_cluster_if_necessary = True,
-    cluster_create_flags=[]):
+    sut_deps = {}):
   """gke_sut_component is a skylark macro that wraps external_sut_component."""
 
-  _verify_params(k8s_yaml_files, load_balancers, cluster_name,
-                 ephemeral_cluster, cluster_create_flags)
+  # The validity of k8s_yaml_files and load_balancers was verified in
+  # k8s_sut_component(). Here we verify only the GKE specific params.
 
-  # Create comma separated lists for yaml files and load balancers.
-  load_balancer_csv = ",".join([load_balancer
-                                for load_balancer in load_balancers])
+  # gke_cluster_info must be a dictionary and it must include some mandatory fields.
+  if type(gke_cluster_info) != "dict":
+    fail("Error: cluster_info %s must be a dictionary of GKE specific arguments." % gke_cluster_info)
 
-  yaml_file_csv = ",".join(["$(rootpath %s)" % yaml_file
-                            for yaml_file in k8s_yaml_files])
+  # Extract params from gke_cluster_info.
+  gcp_project = _get_from_cluster_info(gke_cluster_info, "gcp_project")
+  gcp_zone = _get_from_cluster_info(gke_cluster_info, "gcp_zone")
+  cluster_name = _get_from_cluster_info(gke_cluster_info, "cluster_name")
+  ephemeral_cluster = _get_from_cluster_info(
+      gke_cluster_info,
+      "ephemeral_cluster",
+      mandatory = False,
+      default = False)
+  create_cluster_if_necessary = _get_from_cluster_info(
+      gke_cluster_info,
+      "create_cluster_if_necessary",
+      mandatory = False,
+      default = True)
+  cluster_create_flags = _get_from_cluster_info(
+      gke_cluster_info,
+      "cluster_create_flags",
+      mandatory = False,
+      default = [])
+
+  _verify_params(cluster_name, ephemeral_cluster, cluster_create_flags)
+
+  load_balancer_args=[]
+  for lb in load_balancers:
+    load_balancer_args+=["--load_balancer", lb]
+
+  # Loop through k8s_yaml_files (which is a combination of strings and structs)
+  # and create yaml_file_args and orig_yaml_files.
+  # yaml_file_args is a list of arguments to be sent to gke_setup.sh.
+  # orig_yaml_files is a list of the actual yaml files (or yaml template files)
+  # to be used as the data dependencies of gke_setup.sh.
+  yaml_file_args=[]
+  orig_yaml_files=[]
+  for y in k8s_yaml_files:
+    # y can be either a string or a dict.
+    # If it is a dict then it has two fields: name and substitute.
+    # name is a string and substitute is a list of dicts.
+    # Each substitute dict has a single field such as the key of that field is
+    # replaced with the value.
+    #
+    # All this is verified in k8s_sut.bzl.
+    #
+    # The reason for having a list of single-field-dicts rather than a dict with
+    # multiple fields is because the order of replacement might be important and
+    # dict is not ordered.
+
+    # isinstance is not supported in skylark
+    # pylint: disable=unidiomatic-typecheck
+    if type(y) == "string":
+      yaml_file_args+=["--yaml_file", "$(rootpath %s)" % y]
+      orig_yaml_files+=[y]
+      continue
+
+    yaml_file_args+=["--yaml_file", "$(rootpath %s)" % y["name"]]
+    orig_yaml_files+=[y["name"]]
+    # Add substitute flags.
+    # The location of these flags in the overall list of arguments to
+    # gke_setup.sh is important. The --substitute flags refer to the yaml_file
+    # after which they appear.
+    for s in y["substitute"]:
+      for orig, replacement in s.items():
+        # There should be only one item in s, but we don't verify this here.
+        yaml_file_args+=["--substitute", orig, replacement]
 
   #
   # gke_sut_component has three modes:
@@ -42,26 +99,26 @@ def gke_sut_component(
   external_sut_component(
       name = name,
       docker_image = toolchain_container_images()["rbe-integration-test"],
+      sut_deps = sut_deps,
       prepares = [{
           # The str(Label(...)) is necessary for proper namespace resolution in
           # cases where this repo is imported from another repo.
-          "program" : str(Label("//skylark/gke:create_random_sequence.sh")),
+          "program" : str(Label("//skylark/k8s/gke:create_random_sequence.sh")),
           "output_properties" : ["rand"],
+          "timeout_seconds" : 3,
       }],
       setups = [{
-          "program" : str(Label("//skylark/gke:gke_setup.sh")),
-          "args" : [
-              "--yaml_files=%s" % yaml_file_csv,
-              "--load_balancers=%s" % load_balancer_csv,
-              "--project=%s" % gcp_project,
-              "--zone=%s" % gcp_zone,
+          "program" : str(Label("//skylark/k8s/gke:gke_setup.sh")),
+          "args" : yaml_file_args + load_balancer_args + [
+              "--project" , gcp_project,
+              "--zone" , gcp_zone,
               # When using ephemeral mode, the cluster name gets a suffix.
-              "--cluster_name=%s%s" % (cluster_name, ("-{prep#rand}" if ephemeral_cluster else "")),
+              "--cluster_name", cluster_name + ("-{prep#rand}" if ephemeral_cluster else ""),
               # The "prep" alias is necessary because under the hood,
               # external_sut_component creates two separate sut_components: a prep
               # sut_component which handles prepare and teardown and a second
               # sut_component which handles the setup.
-              "--namespace={prep#rand}",
+              "--namespace", "{prep#rand}",
           ] +
           (["--ephemeral_cluster"] if ephemeral_cluster else []) +
           (["--create_cluster_if_necessary"] if create_cluster_if_necessary else []) +
@@ -70,8 +127,8 @@ def gke_sut_component(
               # Any argument coming after "--" are flags to the
               # "gcloud container clusters create" command.
           ] + cluster_create_flags,
-          "data" : k8s_yaml_files,
-          "deps" : k8s_yaml_files,
+          "data" : orig_yaml_files,
+          "deps" : orig_yaml_files,
           "output_properties" : [
               "cluster_name", # The actual cluster_name (possibly with a suffix)
               "namespace",    # The k8s namespace
@@ -80,24 +137,35 @@ def gke_sut_component(
               # The external ip of each load balancer.
               "ip_" + load_balancer for load_balancer in load_balancers
           ],
+          "timeout_seconds" : 400 if ephemeral_cluster or create_cluster_if_necessary else 50,
       }],
       teardowns = [{
-          "program" : str(Label("//skylark/gke:gke_teardown.sh")),
+          "program" : str(Label("//skylark/k8s/gke:gke_teardown.sh")),
           "args" : [
-              "--project=%s" % gcp_project,
-              "--zone=%s" % gcp_zone,
+              "--project", gcp_project,
+              "--zone", gcp_zone,
               # When using ephemeral mode, the cluster name gets a suffix.
-              "--cluster_name=%s%s" % (cluster_name, ("-{rand}" if ephemeral_cluster else "")),
-              "--namespace={rand}",
+              "--cluster_name",
+              cluster_name + ("-{rand}" if ephemeral_cluster else ""),
+              "--namespace", "{rand}",
           ] +
           (["--ephemeral_cluster"] if ephemeral_cluster else []),
-          "data" : k8s_yaml_files,
-          "deps" : k8s_yaml_files,
+          "timeout_seconds" : 600 if ephemeral_cluster else 50,
       }],
   )
 
-def _verify_params(k8s_yaml_files, load_balancers, cluster_name,
-                   ephemeral_cluster, cluster_create_flags):
+def _get_from_cluster_info(cluster_info,
+                           field_name,
+                           mandatory=True,
+                           default=None):
+  if mandatory:
+    if field_name not in cluster_info:
+      fail("Error: cluster_info %s must contain the mandatory field %s." % (cluster_info, field_name))
+    return cluster_info[field_name]
+
+  return cluster_info.get(field_name, default)
+
+def _verify_params(cluster_name, ephemeral_cluster, cluster_create_flags):
   # Catch configuration errors earlier rather than later and gives informative
   # error messages.
   #
@@ -113,8 +181,6 @@ def _verify_params(k8s_yaml_files, load_balancers, cluster_name,
   # error message compared to the error (and the resulting error message) that
   # would occur later down stream.
 
-  _verify_yaml_files(k8s_yaml_files)
-  _verify_load_balancers(load_balancers)
   _verify_cluster_create_flags(cluster_create_flags)
   _verify_cluster_correctness(cluster_name, ephemeral_cluster)
 
@@ -139,10 +205,6 @@ def _verify_cluster_correctness(cluster_name, ephemeral_cluster):
     _verify_cluster_name(cluster_name, 11)
   else:
     _verify_cluster_name(cluster_name)
-
-def _verify_yaml_files(k8s_yaml_files):
-  if not _is_list_of_strings(k8s_yaml_files):
-    fail("Error: k8s_yaml_files %s is not a list of strings." % k8s_yaml_files)
 
 
 def _verify_cluster_name(cluster_name, max_suffix_length=0):
@@ -176,10 +238,6 @@ def _verify_cluster_name(cluster_name, max_suffix_length=0):
   for c in cluster_name:
     if not (c.islower() or c.isdigit() or c == "-"):
       fail("Error: cluster_name %s must constist only of characters in [-a-z0-9]." % cluster_name)
-
-def _verify_load_balancers(load_balancers):
-  if not _is_list_of_strings(load_balancers):
-    fail("Error: load_balancers %s is not a list of strings." % load_balancers)
 
 def _verify_cluster_create_flags(cluster_create_flags):
   if not _is_list_of_strings(cluster_create_flags):

@@ -14,19 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-USAGE="Usage: $0 --project_id=project_id --image_name=image_name"
+USAGE="Usage: $0 --registry <registry> --repository <repository>"
 
-# Parse arguments. Expect key and value to appear as a single argument with an
-# equal sign. So "--key=value" and not "--key value".
+# Parse arguments. Expect key and value to appear as a separate arguments.
+# So "--key" "value" and not "--key=value".
 parse_args() {
-  for i in "$@"; do
+  while [[ $# > 0 ]]; do
+    i="$1"
     case $i in
-        --project_id=*)
-        PROJECT_ID="${i#*=}"
+        --registry)
+        shift
+        REGISTRY="$1"
         shift
         ;;
-        --image_name=*)
-        IMAGE_NAME="${i#*=}"
+        --repository)
+        shift
+        REPOSITORY="$1"
         shift
         ;;
         *)
@@ -35,12 +38,12 @@ parse_args() {
         ;;
     esac
   done
-  if [[ "$PROJECT_ID" == "" ]]; then
-    echo "Missing project_id"
+  if [[ "$REGISTRY" == "" ]]; then
+    echo "Missing registry"
     return 1
   fi
-  if [[ "$IMAGE_NAME" == "" ]]; then
-    echo "Missing image_name"
+  if [[ "$REPOSITORY" == "" ]]; then
+    echo "Missing repository"
     return 1
   fi
   return 0
@@ -55,5 +58,5 @@ if [[ $? -ne 0 ]]; then
 fi
 
 RAND=$(head -200 /dev/urandom | cksum | cut -f1 -d " ")
-echo "image=gcr.io/${PROJECT_ID}/${IMAGE_NAME}_${RAND}" >> "$_SETUP_OUTPUT"
+echo "image=${REGISTRY}/${REPOSITORY}_${RAND}" >> "$_SETUP_OUTPUT"
 touch "$_SETUP_DONE"

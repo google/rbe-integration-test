@@ -25,7 +25,10 @@ IMAGE=$1
 GCLOUD_BIN="gcloud"
 
 echo "Deleting image $IMAGE ..."
-$GCLOUD_BIN container images delete --quiet --force-delete-tags $IMAGE \
-  || { echo "Failed to delete image $IMAGE."; exit 1; }
+$GCLOUD_BIN container images delete --quiet --force-delete-tags $IMAGE
+if [ $? -eq 0 ]; then
+  echo "Image deleted."
+else
 
-echo "Image deleted."
+  echo "Failed to delete image $IMAGE."
+fi
